@@ -54,6 +54,11 @@ jobs:
           node-version: "22"
           cache: "yarn"
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
       - name: Install dependencies & EAS CLI
         run: |
           yarn install --frozen-lockfile --ignore-engines
