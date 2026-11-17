@@ -1,3 +1,4 @@
+import { NarratorBar } from '@/components/Narrator/NarratorBar';
 import CropRecommendationScreen from '@/components/Dashboard/CropRecommendationScreen';
 import DashboardHeader from '@/components/Dashboard/DashboardHeader';
 import DashboardMainScreen from '@/components/Dashboard/DashboardMainScreen';
@@ -52,20 +53,15 @@ export default function Dashboard() {
       <DashboardHeader />
 
       {/* Tab view for navigating between dashboard screens */}
-           <TabView
+      <TabView
         navigationState={{ index, routes }}
         renderScene={renderScene}
         onIndexChange={setIndex}
         initialLayout={initialLayout}
-        renderTabBar={props => (
-          <TabBar
-            {...props}
-            style={{ backgroundColor: '#22c55e' }}
-            indicatorStyle={{ backgroundColor: 'white' }}
-            labelStyle={{ fontWeight: '600' }}
-          />
-        )}
+        renderTabBar={renderTabBar}
       />
+
+      <NarratorBar />
     </SafeAreaView>
   );
 }

@@ -340,6 +340,26 @@ export default function Index({ onComplete }: OnboardingScreenProps) {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* 1-Tap Quick Enter */}
+        <TouchableOpacity
+          style={styles.quickEnterBtn}
+          onPress={() => {
+            const defaultInfo: UserBasicInfo = {
+              farmerName: 'सरदार हरप्रीत सिंह',
+              language: 'hi',
+              cropType: 'wheat',
+              landSize: 4,
+              location: 'Punjab',
+              locationCoordinates: { long: 75.85, lati: 30.9 },
+            };
+            setUserBasicInfo(defaultInfo);
+            router.push('/(tabs)/Dashboard');
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.quickEnterText}>🌾 सीधे ऐप में प्रवेश करें (Quick Enter)</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.footer}>
@@ -554,5 +574,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
     marginBottom: 10,
+  },
+  quickEnterBtn: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  quickEnterText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#15803d',
   },
 });

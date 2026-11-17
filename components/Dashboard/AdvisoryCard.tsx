@@ -1,100 +1,173 @@
 import { useTodayAdisory } from '@/hooks/useTodayAdisory';
+import { NarratorService } from '@/services/NarratorService';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-/**
- * @description A card component that displays a brief advisory tip and navigates
- * to the full advisory screen on press.
- */
 const AdvisoryCard = () => {
   const router = useRouter();
-  const {Advisory,loading} =useTodayAdisory();
+  const { Advisory, loading, tier, refetch } = useTodayAdisory();
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const handleToggleNarrate = () => {
+    if (isSpeaking) {
+      NarratorService.stop();
+      setIsSpeaking(false);
+    } else {
+      setIsSpeaking(true);
+      NarratorService.speak(Advisory, {
+        language: 'hi-IN',
+        onDone: () => setIsSpeaking(false),
+        onStopped: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
+    }
+  };
+
+  const getTierLabel = () => {
+    if (tier === 'offline/rule-engine') {
+      return '📶 ऑफ़लाइन AI सलाह';
+    }
+    return '✨ AI प्रमाणित सलाह (Verified Advisory)';
+  };
 
   return (
-    <TouchableOpacity
-      style={styles.advisoryCard}
-      onPress={() => router.push('/(tabs)/Advisory')}
-      activeOpacity={0.7}
-    >
-      <View style={styles.upperView}>
-        {loading?<ActivityIndicator size={10}></ActivityIndicator>:<Text>✅</Text>}
-
+    <View style={styles.advisoryCard}>
+      <View style={styles.headerRow}>
+        <View style={styles.headerLeft}>
+          <View style={styles.advisoryIconContainer}>
+            <Ionicons name="sparkles" size={18} color="#d97706" />
+          </View>
+          <View>
+            <Text style={styles.advisoryTitle}>दैनिक AI फसल सलाह (Daily Advisory)</Text>
+            <Text style={styles.tierText}>{getTierLabel()}</Text>
+          </View>
         </View>
-      <View  style={styles.lowerView}>
-              <View style={styles.advisoryIconContainer}>
-        <Ionicons name="bulb-outline" size={24} color="#d97706" />
-      </View>
-      <View style={styles.advisoryContent}>
-        <Text style={styles.advisoryTitle}>Today's Advisory</Text>
-        <Text style={styles.advisoryText}>
-         {Advisory}
-        </Text>
-        <View style={styles.advisoryButton}>
-          <Text style={styles.advisoryButtonText}>Get Full Advisory</Text>
-          <Ionicons name="arrow-forward" size={16} color="#16a34a" />
+
+        <View style={styles.headerRightControls}>
+          <TouchableOpacity
+            style={styles.controlIconBtn}
+            onPress={refetch}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator size="small" color="#d97706" />
+            ) : (
+              <Ionicons name="refresh" size={16} color="#b45309" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.controlIconBtn, isSpeaking && styles.controlSpeaking]}
+            onPress={handleToggleNarrate}
+          >
+            <Ionicons
+              name={isSpeaking ? 'volume-mute' : 'volume-high'}
+              size={18}
+              color={isSpeaking ? '#ef4444' : '#b45309'}
+            />
+          </TouchableOpacity>
         </View>
       </View>
-      </View>
 
-    </TouchableOpacity>
+      <Text style={styles.advisoryText}>{Advisory}</Text>
+
+      <TouchableOpacity
+        style={styles.advisoryButton}
+        onPress={() => router.push('/(tabs)/Advisory')}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.advisoryButtonText}>कृषि मित्र से पूरा परामर्श लें</Text>
+        <Ionicons name="arrow-forward" size={16} color="#15803d" />
+      </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   advisoryCard: {
-    backgroundColor: '#fef3c7',
-    borderRadius: 12,
+    backgroundColor: '#fffbeb',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    flexDirection: 'column',
-    alignItems: 'center',
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
   },
   advisoryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(245, 158, 11, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  advisoryContent: {
-    flex: 1,
   },
   advisoryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#92400e',
+  },
+  tierText: {
+    fontSize: 10,
+    fontWeight: '700',
     color: '#b45309',
+    marginTop: 1,
+  },
+  headerRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  controlIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  controlSpeaking: {
+    backgroundColor: '#fee2e2',
   },
   advisoryText: {
     fontSize: 14,
     color: '#78350f',
-    marginVertical: 4,
-    lineHeight: 20,
+    lineHeight: 21,
+    marginBottom: 12,
   },
   advisoryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fde68a',
   },
   advisoryButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#16a34a',
-    marginRight: 4,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#15803d',
   },
-  lowerView:{
-    flexDirection:'row'
-  },
-    upperView:{
-      flex:1,
-      width:'100%',
-      justifyContent:'flex-end',
-      alignItems:'flex-end',
-  }
 });
 
 export default AdvisoryCard;

@@ -14,7 +14,7 @@ const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({ visible, imageUrl
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.modalBg}>
-        <Image source={{ uri: imageUrl }} style={styles.modalImage} resizeMode="contain" />
+        <Image source={{ uri: imageUrl }} style={styles.modalImage as any} resizeMode="contain" />
         <TouchableOpacity style={styles.modalClose} onPress={onClose}>
           <Ionicons name="close-circle" size={40} color="#fff" />
         </TouchableOpacity>

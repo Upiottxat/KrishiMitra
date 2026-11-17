@@ -1,25 +1,44 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { NarratorService } from '../../services/NarratorService';
 
 const MARKET_DATA = [
-  { crop: 'Rice (Common)', icon: '🌾', price: 2100, change: 50, isPositive: true },
-  { crop: 'Rice (Premium)', icon: '🌾', price: 2350, change: -25, isPositive: false },
+  { crop: 'गेहूं शरबती (Wheat)', icon: '🌾', price: 2450, change: 45, isPositive: true },
+  { crop: 'बासमती धान (Rice 1121)', icon: '🍚', price: 3450, change: 80, isPositive: true },
+  { crop: 'सरसों पीली (Mustard)', icon: '🌱', price: 5850, change: -30, isPositive: false },
+  { crop: 'कपास (Cotton)', icon: '🌿', price: 7200, change: 110, isPositive: true },
 ];
 
-/**
- * @description Card component for displaying current market prices of crops.
- */
 const MarketPriceCard = () => {
+  const router = useRouter();
+
+  const handleNarratePrices = () => {
+    const text = `आज के प्रमुख मंडी भाव: शरबती गेहूं ₹2,450 प्रति क्विंटल (45 रुपये तेज), बासमती धान ₹3,450 प्रति क्विंटल (80 रुपये तेज), सरसों ₹5,850 प्रति क्विंटल। आने वाले सप्ताह में धान और कपास के भाव मजबूत रहने का AI अनुमान है।`;
+    NarratorService.speak(text, { language: 'hi-IN' });
+  };
+
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardTitleContainer}>
           <Ionicons name="trending-up-outline" size={20} color="#16a34a" />
-          <Text style={styles.cardTitle}>Market Prices</Text>
+          <Text style={styles.cardTitle}>मंडी भाव व AI ट्रेंड (Market Trends)</Text>
         </View>
-        <Text style={styles.updateTime}>Updated 2h ago</Text>
+        <TouchableOpacity onPress={handleNarratePrices} style={styles.listenBtn}>
+          <Ionicons name="volume-high" size={16} color="#15803d" />
+        </TouchableOpacity>
       </View>
+
+      {/* AI Trend Alert Banner */}
+      <View style={styles.trendBanner}>
+        <Ionicons name="sparkles" size={14} color="#15803d" />
+        <Text style={styles.trendBannerText}>
+          AI अनुमान: निर्यात मांग बढ़ने से बासमती धान में +4% तेजी की संभावना
+        </Text>
+      </View>
+
       <View style={styles.marketList}>
         {MARKET_DATA.map((item, index) => (
           <View key={index} style={styles.marketItem}>
@@ -35,7 +54,12 @@ const MarketPriceCard = () => {
                   size={12}
                   color={item.isPositive ? '#22c55e' : '#ef4444'}
                 />
-                <Text style={[styles.marketChangeText, { color: item.isPositive ? '#22c55e' : '#ef4444' }]}>
+                <Text
+                  style={[
+                    styles.marketChangeText,
+                    { color: item.isPositive ? '#22c55e' : '#ef4444' },
+                  ]}
+                >
                   {item.isPositive ? '+' : ''}₹{Math.abs(item.change)}
                 </Text>
               </View>
@@ -43,37 +67,68 @@ const MarketPriceCard = () => {
           </View>
         ))}
       </View>
+
+      <TouchableOpacity
+        style={styles.viewMoreBtn}
+        onPress={() => router.push('/(tabs)/Market')}
+      >
+        <Text style={styles.viewMoreText}>सभी मंडियों के भाव व सरकारी योजनाएं देखें</Text>
+        <Ionicons name="arrow-forward" size={14} color="#15803d" />
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'white',
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   cardTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginLeft: 8,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginLeft: 6,
   },
-  updateTime: {
-    fontSize: 12,
-    color: '#6b7280',
+  listenBtn: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+  },
+  trendBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  trendBannerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#166534',
+    flex: 1,
   },
   marketList: {
     gap: 8,
@@ -82,40 +137,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
   marketItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   marketIcon: {
     fontSize: 18,
     marginRight: 8,
   },
   marketCrop: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
+    fontSize: 13,
+    color: '#1f2937',
+    fontWeight: '600',
   },
   marketItemRight: {
     alignItems: 'flex-end',
   },
   marketPrice: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+    fontWeight: 'bold',
+    color: '#111827',
   },
   marketChange: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    gap: 2,
   },
   marketChangeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  viewMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingTop: 10,
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  viewMoreText: {
     fontSize: 12,
-    marginLeft: 4,
-    fontWeight: '500',
+    fontWeight: '700',
+    color: '#15803d',
   },
 });
 

@@ -1,40 +1,61 @@
-import { StorageContext } from "@/Context/StorageContext";
 import { useContext, useEffect, useState } from "react";
-import { useKrishiAI } from "./useKrishiAI";
+import { StorageContext } from "@/Context/StorageContext";
+import { AIService, AIProviderTier } from "@/services/AIService";
 
 export const useTodayAdisory = () => {
-    const {currentMessage,handleSendMessage}  = useKrishiAI();
-    const storageContext   = useContext(StorageContext)
-    const {userBasicInfo} = storageContext;
-    const [Advisory, setAdvisory] = useState("Rain expected tonight. Cover fertilizer bags and avoid field work tomorrow morning.")
-    const [loading, setLoading] = useState(false);
-    // const [isDeviceOnline, setIsDeviceOnline] = useState(navigator.onLine);
+  const storageContext = useContext(StorageContext);
+  const userBasicInfo = storageContext?.userBasicInfo;
+  const weatherData = storageContext?.weatherData;
 
-    const fetchAdvisory=async()=>{
-        // if(!isDeviceOnline) return;
-    
-        try{    
-            console.log("Starting to give the today's adivce ");
-            
-            setLoading(true);
-             // console.log(`Provide a short advisory for today based on the weather forecast. The advisory should be concise and actionable for farmers. Details are ${JSON.stringify(userBasicInfo)} the size of land is in acres  `);
-            // await handleSendMessage(`Provide a short advisory for today based on the weather forecast. The advisory should be concise and actionable for farmers. Details are ${JSON.stringify(userBasicInfo)} the size of land is in acres  `)
-          
-           if(!currentMessage) return ;
-            setAdvisory(currentMessage)
-            console.log("the today's advisory is "+currentMessage);
-            
-        }
-        catch(e)
+  const [advisory, setAdvisory] = useState<string>(
+    "🌾 आज का कृषि सुझाव: हल्की धूप व अनुकूल नमी है। गेहूं व सरसों में कल्ले निकलने की अवस्था पर निगरानी रखें। यदि हल्की वर्षा की संभावना हो तो सिंचाई 2 दिन टालें।"
+  );
+  const [loading, setLoading] = useState<boolean>(false);
+  const [tier, setTier] = useState<AIProviderTier>('groq/openai/gpt-oss-20b');
+
+  const fetchAdvisory = async () => {
+    setLoading(true);
+    const crop = userBasicInfo?.cropType || 'Wheat / Rice';
+    const location = userBasicInfo?.location || 'North India';
+    const weatherSummary = weatherData?.list?.[0]?.weather?.[0]?.description || 'Partly Cloudy, mild temperature';
+
+    const prompt = `Give a concise, practical, 2-line daily farming advisory in Hindi for a farmer with:
+Crop: ${crop}
+Location: ${location}
+Current Weather: ${weatherSummary}
+Output ONLY the Hindi advisory text with 1 emoji at the start. No greetings, no English, max 35 words.`;
+
+    try {
+      await AIService.streamChat(
         {
-            console.log("error fetching the Adviosy in dashboard in useTodayAdvisory"+e);
+          messageText: prompt,
+          langInstruction: 'Respond in Hindi only.',
+          customGroqKey: storageContext?.customGroqKey,
+          customGeminiKey: storageContext?.customGeminiKey,
+        },
+        {
+          onModelSelected: (selectedTier) => setTier(selectedTier),
+          onChunk: () => {},
+          onComplete: (text, usedTier) => {
+            if (text && text.trim()) {
+              setAdvisory(text.trim());
+              setTier(usedTier);
+            }
+            setLoading(false);
+          },
+          onError: () => {
+            setLoading(false);
+          },
         }
-        finally{
-            setLoading(false)
-        }
+      );
+    } catch (e) {
+      setLoading(false);
     }
-    useEffect(()=>{
-        fetchAdvisory();
-    },[])
-    return {Advisory,loading};
-}
+  };
+
+  useEffect(() => {
+    fetchAdvisory();
+  }, [userBasicInfo?.cropType, userBasicInfo?.location]);
+
+  return { Advisory: advisory, loading, tier, refetch: fetchAdvisory };
+};

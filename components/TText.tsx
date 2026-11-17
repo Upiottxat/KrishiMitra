@@ -3,7 +3,7 @@ import { Text, TextProps } from "react-native";
 import { useTranslation } from "react-i18next";
 
 interface TTextProps extends TextProps {
-  children: ReactNode;
+  children?: ReactNode;
   values?: Record<string, any>; 
 }
 
@@ -13,7 +13,7 @@ export default function TText({ children, values = {}, style, ...props }: TTextP
   let content: ReactNode = children;
 
   if (typeof children === "string") {
-    content = t(children, values);
+    content = t(children, values) as unknown as ReactNode;
   }
 
   return (

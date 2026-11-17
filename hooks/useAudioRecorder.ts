@@ -2,21 +2,23 @@ import { useState } from 'react';
 import { Alert } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { useTranslation } from 'react-i18next';
 import { usePermissions } from './usePermissions';
-import { LANGUAGES } from '../constants/languages';
-
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+import { AIService } from '../services/AIService';
 
 interface AudioRecorderProps {
   langCode: string;
   onTranscriptionComplete: (text: string) => void;
+  customGroqKey?: string;
+  customGeminiKey?: string;
 }
 
-export const useAudioRecorder = ({ langCode, onTranscriptionComplete }: AudioRecorderProps) => {
+export const useAudioRecorder = ({
+  langCode,
+  onTranscriptionComplete,
+  customGroqKey,
+  customGeminiKey,
+}: AudioRecorderProps) => {
   const { t } = useTranslation();
   const [recording, setRecording] = useState<Audio.Recording | undefined>(undefined);
   const [isListening, setIsListening] = useState(false);
@@ -26,16 +28,22 @@ export const useAudioRecorder = ({ langCode, onTranscriptionComplete }: AudioRec
   const startRecording = async () => {
     const granted = await requestAudioPermission();
     if (!granted) {
-      Alert.alert(t('alerts.permission'), t('alerts.micPermission'));
+      Alert.alert(t('alerts.permission') || 'Permission Required', t('alerts.micPermission') || 'Microphone access is needed for voice assistance.');
       return;
     }
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(newRecording);
       setIsListening(true);
     } catch (err) {
-      Alert.alert(t('alerts.error'), t('alerts.startRecordingError'));
+      console.warn('[useAudioRecorder] Start error:', err);
+      Alert.alert(t('alerts.error') || 'Error', t('alerts.startRecordingError') || 'Could not start voice recording.');
     }
   };
 
@@ -43,24 +51,38 @@ export const useAudioRecorder = ({ langCode, onTranscriptionComplete }: AudioRec
     if (!recording) return;
     setIsListening(false);
     setIsTranscribing(true);
+
     try {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
-      if (!uri) throw new Error('No recording URI');
+      if (!uri) throw new Error('No recording URI available');
 
-      const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-      const audioPart = { inlineData: { data: base64, mimeType: 'audio/mp4' } };
-      const langName = LANGUAGES.find(l => l.code === langCode)?.name || 'auto';
-      const result = await model.generateContent([`Transcribe to ${langName}.`, audioPart]);
-      const transcribed = result.response?.text() ?? '';
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: 'base64' as any,
+      });
 
-      if (transcribed.trim()) {
-        onTranscriptionComplete(transcribed);
+      const transcribed = await AIService.transcribeAudio(
+        uri,
+        base64,
+        langCode,
+        customGroqKey,
+        customGeminiKey
+      );
+
+      if (transcribed && transcribed.trim()) {
+        onTranscriptionComplete(transcribed.trim());
       } else {
-        Alert.alert(t('alerts.transcription'), t('alerts.transcriptionNoText'));
+        Alert.alert(
+          t('alerts.transcription') || 'Voice Assistant',
+          t('alerts.transcriptionNoText') || 'No speech detected. Please speak clearly.'
+        );
       }
-    } catch (err) {
-      Alert.alert(t('alerts.error'), t('alerts.transcriptionFailed'));
+    } catch (err: any) {
+      console.warn('[useAudioRecorder] Transcribe error:', err);
+      Alert.alert(
+        t('alerts.error') || 'Transcription Notice',
+        err.message || 'Voice recognition completed. Please try again or type.'
+      );
     } finally {
       setRecording(undefined);
       setIsTranscribing(false);
@@ -69,6 +91,5 @@ export const useAudioRecorder = ({ langCode, onTranscriptionComplete }: AudioRec
 
   const handleMicPress = () => (isListening ? stopRecordingAndTranscribe() : startRecording());
 
-  return { isListening, isTranscribing, handleMicPress };
+  return { isListening, isTranscribing, handleMicPress, startRecording, stopRecordingAndTranscribe };
 };
-

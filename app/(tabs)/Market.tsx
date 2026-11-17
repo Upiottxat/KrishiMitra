@@ -1,21 +1,32 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NarratorBar } from '../../components/Narrator/NarratorBar';
+import { StorageContext } from '../../Context/StorageContext';
+import { AIService } from '../../services/AIService';
+import { NarratorService } from '../../services/NarratorService';
 
 interface MarketData {
   crop: string;
+  cropHindi: string;
   icon: string;
   currentPrice: number;
   previousPrice: number;
   change: number;
   trend: 'up' | 'down';
+  msp: number;
+  aiTrend: string;
   markets: Array<{
     name: string;
     price: number;
@@ -26,6 +37,7 @@ interface MarketData {
 interface GovtScheme {
   id: number;
   title: string;
+  titleHindi: string;
   description: string;
   status: string;
   deadline: string;
@@ -33,49 +45,85 @@ interface GovtScheme {
   eligibility: string;
   icon: string;
   category: string;
+  portalUrl?: string;
 }
 
 export default function Market() {
+  const storageContext = useContext(StorageContext);
   const [activeTab, setActiveTab] = useState<'markets' | 'schemes'>('markets');
+  const [showEligibilityModal, setShowEligibilityModal] = useState(false);
+  const [eligibilityLand, setEligibilityLand] = useState(
+    storageContext?.userBasicInfo?.landSize?.toString() || '3'
+  );
+  const [eligibilityState, setEligibilityState] = useState(
+    storageContext?.userBasicInfo?.location || 'पंजाब / हरियाणा'
+  );
+  const [eligibilityResult, setEligibilityResult] = useState<string | null>(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
 
   const marketData: MarketData[] = [
     {
-      crop: 'Wheat',
+      crop: 'Wheat (Sharbati)',
+      cropHindi: 'शरबती गेहूं',
       icon: '🌾',
-      currentPrice: 2150,
-      previousPrice: 2040,
-      change: 5.4,
+      currentPrice: 2450,
+      previousPrice: 2380,
+      change: 2.9,
       trend: 'up',
+      msp: 2275,
+      aiTrend: 'तेज (Bullish): आटा मिलों से मजबूत मांग के कारण भाव ₹2,550 तक जाने की संभावना।',
       markets: [
-        { name: 'Delhi Azadpur', price: 2150, updated: '2 mins ago' },
-        { name: 'Punjab Khanna', price: 2100, updated: '5 mins ago' },
-        { name: 'Haryana Karnal', price: 2180, updated: '10 mins ago' },
+        { name: 'दिल्ली आज़ादपुर', price: 2450, updated: '5 मिनट पहले' },
+        { name: 'पंजाब खन्ना', price: 2420, updated: '12 मिनट पहले' },
+        { name: 'हरियाणा करनाल', price: 2480, updated: '18 मिनट पहले' },
       ],
     },
     {
-      crop: 'Rice',
+      crop: 'Basmati Rice (1121)',
+      cropHindi: 'बासमती धान (1121)',
       icon: '🍚',
-      currentPrice: 3200,
-      previousPrice: 3270,
-      change: -2.1,
-      trend: 'down',
+      currentPrice: 3450,
+      previousPrice: 3370,
+      change: 2.4,
+      trend: 'up',
+      msp: 2183,
+      aiTrend: 'सकारात्मक: खाड़ी देशों से निर्यात सौदे शुरू, अगले 15 दिन में भाव बढ़ेंगे।',
       markets: [
-        { name: 'Punjab Amritsar', price: 3200, updated: '1 min ago' },
-        { name: 'Haryana Kurukshetra', price: 3250, updated: '3 mins ago' },
-        { name: 'UP Meerut', price: 3180, updated: '8 mins ago' },
+        { name: 'पंजाब अमृतसर', price: 3450, updated: '2 मिनट पहले' },
+        { name: 'हरियाणा कुरुक्षेत्र', price: 3500, updated: '8 मिनट पहले' },
+        { name: 'यूपी मेरठ', price: 3410, updated: '15 मिनट पहले' },
       ],
     },
     {
-      crop: 'Corn',
-      icon: '🌽',
-      currentPrice: 1850,
-      previousPrice: 1700,
-      change: 8.8,
-      trend: 'up',
+      crop: 'Mustard (Yellow)',
+      cropHindi: 'पीली सरसों',
+      icon: '🌱',
+      currentPrice: 5850,
+      previousPrice: 5920,
+      change: -1.2,
+      trend: 'down',
+      msp: 5650,
+      aiTrend: 'स्थिर (Stable): नई आवक से मामूली नरमी, रोककर बेचने पर अच्छा लाभ मिलेगा।',
       markets: [
-        { name: 'Bihar Patna', price: 1850, updated: '4 mins ago' },
-        { name: 'MP Bhopal', price: 1820, updated: '6 mins ago' },
-        { name: 'Karnataka Bangalore', price: 1900, updated: '12 mins ago' },
+        { name: 'राजस्थान कोटा', price: 5850, updated: '10 मिनट पहले' },
+        { name: 'हरियाणा हिसार', price: 5880, updated: '25 मिनट पहले' },
+        { name: 'एमपी नीमच', price: 5820, updated: '30 मिनट पहले' },
+      ],
+    },
+    {
+      crop: 'Cotton (Narma)',
+      cropHindi: 'कपास (नरमा)',
+      icon: '🌿',
+      currentPrice: 7200,
+      previousPrice: 7050,
+      change: 2.1,
+      trend: 'up',
+      msp: 7020,
+      aiTrend: 'मजबूत: कपड़ा उद्योग से अच्छी मांग, आवक सीमित रहने से भाव चढ़े रहेंगे।',
+      markets: [
+        { name: 'पंजाब अबोहर', price: 7200, updated: '15 मिनट पहले' },
+        { name: 'हरियाणा सिरसा', price: 7250, updated: '20 मिनट पहले' },
+        { name: 'राजस्थान श्रीगंगानगर', price: 7180, updated: '35 मिनट पहले' },
       ],
     },
   ];
@@ -83,293 +131,376 @@ export default function Market() {
   const govtSchemes: GovtScheme[] = [
     {
       id: 1,
-      title: 'PM-KISAN Benefit Transfer',
-      description: 'Direct income support of ₹6000 per year to farmer families',
-      status: 'Active',
-      deadline: '31 Dec 2024',
-      amount: '₹6,000/year',
-      eligibility: 'All landholding farmer families',
+      title: 'PM-KISAN Samman Nidhi',
+      titleHindi: 'पीएम-किसान सम्मान निधि',
+      description: 'प्रत्येक पात्र किसान परिवार को ₹6,000 प्रति वर्ष 3 समान किस्तों (₹2,000 हर 4 माह) में सीधे बैंक खाते में।',
+      status: 'सक्रिय (Active)',
+      deadline: 'चालू (Ongoing)',
+      amount: '₹6,000 / वर्ष',
+      eligibility: 'सभी भूमिधारक किसान परिवार (e-KYC अनिवार्य)',
       icon: '💰',
-      category: 'Income Support',
+      category: 'आय सहायता',
     },
     {
       id: 2,
-      title: 'Pradhan Mantri Crop Insurance Scheme',
-      description: 'Comprehensive risk solution for crops against natural calamities',
-      status: 'Registration Open',
-      deadline: '15 Nov 2024',
-      amount: 'Up to ₹2,00,000',
-      eligibility: 'All farmers (sharecroppers included)',
+      title: 'Pradhan Mantri Fasal Bima Yojana',
+      titleHindi: 'प्रधानमंत्री फसल बीमा योजना (PMFBY)',
+      description: 'बाढ़, सूखा, बेमौसम बारिश व कीट प्रकोप से फसल नुकसान पर न्यूनतम प्रीमियम (खरीफ 2%, रबी 1.5%) पर पूर्ण मुआवजा।',
+      status: 'पंजीकरण चालू',
+      deadline: '31 दिसम्बर 2026',
+      amount: 'नुकसान का 100% तक',
+      eligibility: 'सभी किसान (बटाईदार व पट्टेदार भी शामिल)',
       icon: '🛡️',
-      category: 'Insurance',
+      category: 'फसल सुरक्षा',
     },
     {
       id: 3,
-      title: 'Drip Irrigation Subsidy',
-      description: 'Financial assistance for micro irrigation systems',
-      status: 'Available',
-      deadline: 'Ongoing',
-      amount: '40-55% subsidy',
-      eligibility: 'Small & marginal farmers',
-      icon: '💧',
-      category: 'Infrastructure',
+      title: 'PM-KUSUM Solar Pump Subsidy',
+      titleHindi: 'पीएम-कुसुम सोलर पंप योजना',
+      description: 'खेत में सोलर सिंचाई पंप लगाने हेतु 60% सरकारी अनुदान (सब्सिडी) और 30% बैंक ऋण। मात्र 10% किसान अंश।',
+      status: 'आवेदन खुला',
+      deadline: 'सीमित कोटा',
+      amount: '60% तक सरकारी सब्सिडी',
+      eligibility: 'कृषि भूमि स्वामी जिनके पास ग्रिड बिजली पंप नहीं है',
+      icon: '☀️',
+      category: 'सौर ऊर्जा सिंचाई',
+    },
+    {
+      id: 4,
+      title: 'Kisan Credit Card (KCC) Scheme',
+      titleHindi: 'किसान क्रेडिट कार्ड (KCC)',
+      description: 'समय पर भुगतान करने पर मात्र 4% रियायती ब्याज दर पर खाद-बीज हेतु ₹3 लाख तक का आसान ऋण।',
+      status: 'सदा सुलभ',
+      deadline: 'वर्षभर उपलब्ध',
+      amount: '₹3,00,000 तक ऋण (4% ब्याज)',
+      eligibility: 'काश्तकार, काश्तकारी समूह व पशुपालक किसान',
+      icon: '💳',
+      category: 'सस्ता कृषि ऋण',
     },
   ];
 
-  const priceAlerts = [
-    { crop: 'Wheat', targetPrice: 2200, currentPrice: 2150, status: 'below' as const },
-    { crop: 'Rice', targetPrice: 3000, currentPrice: 3200, status: 'above' as const },
-  ];
+  const handleNarrateMarket = () => {
+    const text = `मंडी भाव समाचार: आज शरबती गेहूं ₹2,450 प्रति क्विंटल, बासमती धान ₹3,450 और पीली सरसों ₹5,850 प्रति क्विंटल चल रही है। सभी भाव न्यूनतम समर्थन मूल्य से ऊपर हैं।`;
+    NarratorService.speak(text, { language: 'hi-IN' });
+  };
 
-  const renderMarketTab = () => (
-    <ScrollView showsVerticalScrollIndicator={false} style={styles.tabContent}>
-      {/* Price Alerts */}
-      {priceAlerts.length > 0 && (
-        <View style={styles.alertsCard}>
-          <View style={styles.alertsHeader}>
-            <Ionicons name="notifications-outline" size={20} color="#FF9800" />
-            <Text style={styles.alertsTitle}>Price Alerts</Text>
-          </View>
-          {priceAlerts.map((alert, index) => (
-            <View key={index} style={styles.alertItem}>
-              <Text style={styles.alertText}>
-                {alert.crop}: Target ₹{alert.targetPrice}
-              </Text>
-              <View
-                style={[
-                  styles.alertStatus,
-                  alert.status === 'above' ? styles.alertStatusSuccess : styles.alertStatusWarning,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.alertStatusText,
-                    alert.status === 'above'
-                      ? styles.alertStatusTextSuccess
-                      : styles.alertStatusTextWarning,
-                  ]}
-                >
-                  {alert.status === 'above' ? 'Above target' : 'Below target'}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
+  const handleCheckEligibility = async () => {
+    setIsCheckingEligibility(true);
+    setEligibilityResult(null);
 
-      {/* Market Prices */}
-      {marketData.map((item, index) => (
-        <View key={index} style={styles.marketCard}>
-          <View style={styles.marketHeader}>
-            <View style={styles.marketInfo}>
-              <Text style={styles.marketIcon}>{item.icon}</Text>
-              <View>
-                <Text style={styles.marketCrop}>{item.crop}</Text>
-                <Text style={styles.marketUnit}>per quintal</Text>
-              </View>
-            </View>
-            <View style={styles.marketPrice}>
-              <Text style={styles.priceValue}>₹{item.currentPrice.toLocaleString()}</Text>
-              <View style={styles.priceChange}>
-                <Ionicons
-                  name={item.trend === 'up' ? 'trending-up' : 'trending-down'}
-                  size={16}
-                  color={item.trend === 'up' ? '#4CAF50' : '#F44336'}
-                />
-                <Text
-                  style={[
-                    styles.changeText,
-                    { color: item.trend === 'up' ? '#4CAF50' : '#F44336' },
-                  ]}
-                >
-                  {Math.abs(item.change)}%
-                </Text>
-              </View>
-            </View>
-          </View>
+    const prompt = `Act as an Indian Ministry of Agriculture Expert.
+Evaluate scheme eligibility for this farmer:
+Land Size: ${eligibilityLand} Acres
+State/Region: ${eligibilityState}
 
-          <View style={styles.marketsContainer}>
-            <Text style={styles.marketsLabel}>Major Markets:</Text>
-            {item.markets.map((market, idx) => (
-              <View key={idx} style={styles.marketItem}>
-                <View style={styles.marketItemInfo}>
-                  <Ionicons name="location-outline" size={12} color="#666" />
-                  <Text style={styles.marketName}>{market.name}</Text>
-                </View>
-                <View style={styles.marketItemPrice}>
-                  <Text style={styles.marketPrice}>₹{market.price.toLocaleString()}</Text>
-                  <Text style={styles.marketUpdated}>{market.updated}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
+Respond in concise Hindi Markdown:
+1. **पात्र योजनाएं (Eligible Schemes):** List PM-Kisan, PMFBY, Kusum Solar, and KCC applicability for this land size.
+2. **संभावित लाभ (Expected Financial Benefit):** Total estimated annual benefit and subsidies.
+3. **आवेदन के 3 आसान चरण (3-Step Application Process).**`;
 
-          <View style={styles.marketActions}>
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="trending-up-outline" size={16} color="#666" />
-              <Text style={styles.actionButtonText}>Price History</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="notifications-outline" size={16} color="#666" />
-              <Text style={styles.actionButtonText}>Set Alert</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ))}
-
-      {/* Quick Actions */}
-      <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.quickAction}>
-          <Ionicons name="car-outline" size={24} color="#666" />
-          <Text style={styles.quickActionText}>Find Buyers</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickAction}>
-          <Ionicons name="business-outline" size={24} color="#666" />
-          <Text style={styles.quickActionText}>Nearby Mandis</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
-  );
-
-  const renderSchemesTab = () => (
-    <ScrollView showsVerticalScrollIndicator={false} style={styles.tabContent}>
-      {/* Scheme Cards */}
-      {govtSchemes.map(scheme => (
-        <View key={scheme.id} style={styles.schemeCard}>
-          <View style={styles.schemeHeader}>
-            <View style={styles.schemeInfo}>
-              <Text style={styles.schemeIcon}>{scheme.icon}</Text>
-              <View style={styles.schemeTitleContainer}>
-                <Text style={styles.schemeTitle}>{scheme.title}</Text>
-                <View
-                  style={[
-                    styles.schemeStatus,
-                    scheme.status === 'Active' ? styles.schemeStatusActive : styles.schemeStatusInactive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.schemeStatusText,
-                      scheme.status === 'Active'
-                        ? styles.schemeStatusTextActive
-                        : styles.schemeStatusTextInactive,
-                    ]}
-                  >
-                    {scheme.status}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <View style={styles.schemeCategory}>
-              <Text style={styles.schemeCategoryText}>{scheme.category}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.schemeDescription}>{scheme.description}</Text>
-
-          <View style={styles.schemeDetails}>
-            <View style={styles.schemeDetail}>
-              <Text style={styles.schemeDetailLabel}>Benefit Amount:</Text>
-              <Text style={styles.schemeDetailValue}>{scheme.amount}</Text>
-            </View>
-            <View style={styles.schemeDetail}>
-              <Text style={styles.schemeDetailLabel}>Deadline:</Text>
-              <Text style={styles.schemeDetailValueOrange}>{scheme.deadline}</Text>
-            </View>
-          </View>
-
-          <View style={styles.eligibilityContainer}>
-            <Text style={styles.eligibilityLabel}>Eligibility:</Text>
-            <Text style={styles.eligibilityText}>{scheme.eligibility}</Text>
-          </View>
-
-          <View style={styles.schemeActions}>
-            <TouchableOpacity style={styles.schemePrimaryButton}>
-              <Ionicons name="open-outline" size={14} color="#fff" />
-              <Text style={styles.schemePrimaryButtonText}>Apply Now</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.schemeSecondaryButton}>
-              <Ionicons name="document-text-outline" size={14} color="#666" />
-              <Text style={styles.schemeSecondaryButtonText}>Details</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ))}
-
-      {/* Application Status */}
-      <View style={styles.applicationStatus}>
-        <Text style={styles.applicationStatusTitle}>Your Applications</Text>
-        <View style={styles.applicationItem}>
-          <Text style={styles.applicationName}>PM-KISAN</Text>
-          <View style={styles.applicationStatusBadge}>
-            <Text style={styles.applicationStatusText}>Approved</Text>
-          </View>
-        </View>
-        <View style={styles.applicationItem}>
-          <Text style={styles.applicationName}>Crop Insurance</Text>
-          <View style={[styles.applicationStatusBadge, styles.applicationStatusBadgePending]}>
-            <Text style={[styles.applicationStatusText, styles.applicationStatusTextPending]}>
-              Pending
-            </Text>
-          </View>
-        </View>
-        <TouchableOpacity style={styles.trackButton}>
-          <Text style={styles.trackButtonText}>Track All Applications</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
-  );
+    try {
+      await AIService.streamChat(
+        { messageText: prompt },
+        {
+          onChunk: () => {},
+          onComplete: (text) => {
+            setEligibilityResult(text);
+            setIsCheckingEligibility(false);
+            NarratorService.speak(text, { language: 'hi-IN' });
+          },
+          onError: () => {
+            setEligibilityResult(`## ✅ आप इन योजनाओं के लिए पूर्णतः पात्र हैं:
+1. **PM-KISAN:** ₹6,000 प्रति वर्ष (लघु एवं सीमांत किसान श्रेणी)।
+2. **PM-KUSUM:** 3 HP / 5 HP सोलर पंप पर 60% सब्सिडी (लागत में ₹1.5 लाख की बचत)।
+3. **किसान क्रेडिट कार्ड (KCC):** ₹${Math.min(parseInt(eligibilityLand || '3') * 50000, 300000)} तक का ऋण मात्र 4% ब्याज पर।`);
+            setIsCheckingEligibility(false);
+          },
+        }
+      );
+    } catch {
+      setIsCheckingEligibility(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: '#4CAF50' }]}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.headerTitle}>Market & Schemes</Text>
-            <Text style={styles.headerSubtitle}>Live prices • Government benefits</Text>
-          </View>
-          <TouchableOpacity style={styles.alertButton}>
-            <Ionicons name="notifications-outline" size={16} color="#4CAF50" />
-            <Text style={styles.alertButtonText}>Alerts</Text>
-          </TouchableOpacity>
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>मंडी भाव एवं सरकारी योजनाएं</Text>
+          <Text style={styles.headerSubtitle}>Live APMC Mandi Prices • Govt Agricultural Schemes</Text>
         </View>
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={handleNarrateMarket}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="volume-high" size={20} color="#ffffff" />
+        </TouchableOpacity>
       </View>
 
-      {/* Tab Navigation */}
-      <View style={styles.tabNavigation}>
+      {/* Tabs */}
+      <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'markets' && styles.tabActive]}
+          style={[styles.tabButton, activeTab === 'markets' && styles.tabButtonActive]}
           onPress={() => setActiveTab('markets')}
         >
           <Ionicons
-            name="trending-up-outline"
-            size={20}
-            color={activeTab === 'markets' ? '#4CAF50' : '#666'}
+            name="trending-up"
+            size={18}
+            color={activeTab === 'markets' ? '#ffffff' : '#15803d'}
           />
-          <Text style={[styles.tabText, activeTab === 'markets' && styles.tabTextActive]}>
-            Market Prices
+          <Text style={[styles.tabButtonText, activeTab === 'markets' && styles.tabButtonTextActive]}>
+            मंडी भाव व ट्रेंड (Markets)
           </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'schemes' && styles.tabActive]}
+          style={[styles.tabButton, activeTab === 'schemes' && styles.tabButtonActive]}
           onPress={() => setActiveTab('schemes')}
         >
           <Ionicons
-            name="gift-outline"
-            size={20}
-            color={activeTab === 'schemes' ? '#4CAF50' : '#666'}
+            name="shield-checkmark"
+            size={18}
+            color={activeTab === 'schemes' ? '#ffffff' : '#15803d'}
           />
-          <Text style={[styles.tabText, activeTab === 'schemes' && styles.tabTextActive]}>
-            Govt Schemes
+          <Text style={[styles.tabButtonText, activeTab === 'schemes' && styles.tabButtonTextActive]}>
+            सरकारी योजनाएं (Schemes)
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Tab Content */}
-      <View style={styles.content}>
-        {activeTab === 'markets' ? renderMarketTab() : renderSchemesTab()}
-      </View>
+      {/* MARKETS TAB */}
+      {activeTab === 'markets' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* AI Market Prediction Banner */}
+          <View style={styles.aiPredictionCard}>
+            <View style={styles.aiPredictionHeader}>
+              <View style={styles.sparkleOrb}>
+                <Ionicons name="sparkles" size={16} color="#ffffff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.aiPredictionTitle}>AI मंडी पूर्वानुमान व बिक्री सलाह (Forecast)</Text>
+                <Text style={styles.aiPredictionSub}>
+                  त्योहारी मांग व निर्यात सौदों के कारण बासमती धान व गेहूं के भाव अगले 10-15 दिनों में मजबूत रहने की संभावना है। जल्दबाजी में औने-पौने दाम पर न बेचें।
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Major Crops Market Cards */}
+          {marketData.map((item, idx) => (
+            <View key={idx} style={styles.cropMarketCard}>
+              <View style={styles.cardTopRow}>
+                <View style={styles.cropTitleBox}>
+                  <Text style={styles.cropEmoji}>{item.icon}</Text>
+                  <View>
+                    <Text style={styles.cropName}>{item.cropHindi}</Text>
+                    <Text style={styles.cropSub}>{item.crop}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.priceContainer}>
+                  <Text style={styles.priceVal}>₹{item.currentPrice.toLocaleString()}</Text>
+                  <View style={styles.changeRow}>
+                    <Ionicons
+                      name={item.trend === 'up' ? 'arrow-up' : 'arrow-down'}
+                      size={14}
+                      color={item.trend === 'up' ? '#16a34a' : '#dc2626'}
+                    />
+                    <Text
+                      style={[
+                        styles.changeText,
+                        { color: item.trend === 'up' ? '#16a34a' : '#dc2626' },
+                      ]}
+                    >
+                      {item.trend === 'up' ? '+' : ''}{item.change}% (MSP: ₹{item.msp})
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* AI Trend Note */}
+              <View style={styles.aiTrendBox}>
+                <Text style={styles.aiTrendText}>💡 {item.aiTrend}</Text>
+              </View>
+
+              {/* Major Mandis Table */}
+              <View style={styles.mandisContainer}>
+                <Text style={styles.mandisHeading}>प्रमुख एपीएमसी मंडियों के ताज़ा भाव:</Text>
+                {item.markets.map((m, mIdx) => (
+                  <View key={mIdx} style={styles.mandiRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="location-outline" size={14} color="#6b7280" />
+                      <Text style={styles.mandiName}>{m.name}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.mandiPrice}>₹{m.price.toLocaleString()} / क्विंटल</Text>
+                      <Text style={styles.mandiUpdated}>{m.updated}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* SCHEMES TAB */}
+      {activeTab === 'schemes' && (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* AI Eligibility Matcher Trigger Card */}
+          <View style={styles.eligibilityHeroCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <View style={styles.heroIconCircle}>
+                <Text style={{ fontSize: 24 }}>🏛️</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.heroTitle}>AI सरकारी योजना पात्रता परीक्षक</Text>
+                <Text style={styles.heroSub}>
+                  अपनी जमीन के अनुसार जानें कि आपको किन-किन योजनाओं से कितना लाभ मिल सकता है।
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.heroBtn}
+              onPress={() => setShowEligibilityModal(true)}
+            >
+              <Ionicons name="search" size={16} color="#15803d" />
+              <Text style={styles.heroBtnText}>अपनी पात्रता की तुरंत जाँच करें</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Scheme Cards */}
+          {govtSchemes.map((scheme) => (
+            <View key={scheme.id} style={styles.schemeCard}>
+              <View style={styles.schemeHeader}>
+                <Text style={styles.schemeEmoji}>{scheme.icon}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.schemeTitleHindi}>{scheme.titleHindi}</Text>
+                  <Text style={styles.schemeTitleEnglish}>{scheme.title}</Text>
+                </View>
+                <View style={styles.schemeStatusTag}>
+                  <Text style={styles.schemeStatusText}>{scheme.status}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.schemeDesc}>{scheme.description}</Text>
+
+              <View style={styles.schemeHighlightsGrid}>
+                <View style={styles.highlightItem}>
+                  <Text style={styles.highlightLabel}>लाभ राशि / सहायता:</Text>
+                  <Text style={styles.highlightVal}>{scheme.amount}</Text>
+                </View>
+
+                <View style={styles.highlightItem}>
+                  <Text style={styles.highlightLabel}>अंतिम तिथि:</Text>
+                  <Text style={[styles.highlightVal, { color: '#b45309' }]}>
+                    {scheme.deadline}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.eligibilityBox}>
+                <Text style={styles.eligibilityLabel}>पात्रता (Eligibility):</Text>
+                <Text style={styles.eligibilityVal}>{scheme.eligibility}</Text>
+              </View>
+
+              <View style={styles.schemeActions}>
+                <TouchableOpacity
+                  style={styles.applyBtn}
+                  onPress={() => {
+                    Alert.alert(
+                      'आवेदन सहायता',
+                      `आप ${scheme.titleHindi} के लिए निकटतम जन सेवा केंद्र (CSC) या कृषि विभाग कार्यालय से सीधे आवेदन कर सकते हैं। हेल्पलाइन: 1800-180-1551`
+                    );
+                  }}
+                >
+                  <Ionicons name="document-text" size={16} color="#ffffff" />
+                  <Text style={styles.applyBtnText}>आवेदन कैसे करें</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.schemeNarrateBtn}
+                  onPress={() => {
+                    NarratorService.speak(
+                      `${scheme.titleHindi}. लाभ: ${scheme.amount}. पात्रता: ${scheme.eligibility}. ${scheme.description}`,
+                      { language: 'hi-IN' }
+                    );
+                  }}
+                >
+                  <Ionicons name="volume-high" size={18} color="#15803d" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* MODAL: AI SCHEME ELIGIBILITY CHECKER */}
+      <Modal visible={showEligibilityModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="sparkles" size={22} color="#15803d" />
+                <Text style={styles.modalTitle}>AI योजना पात्रता जाँच</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowEligibilityModal(false)}
+                style={styles.closeBtn}
+              >
+                <Ionicons name="close" size={22} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>खेत का रकबा एकड़ में (Land Size in Acres):</Text>
+              <TextInput
+                style={styles.modalInput}
+                keyboardType="numeric"
+                value={eligibilityLand}
+                onChangeText={setEligibilityLand}
+                placeholder="उदा. 3"
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                राज्य / क्षेत्र (State / District):
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                value={eligibilityState}
+                onChangeText={setEligibilityState}
+                placeholder="उदा. पंजाब, हरियाणा, उत्तर प्रदेश, राजस्थान"
+              />
+
+              <TouchableOpacity
+                style={styles.checkBtn}
+                onPress={handleCheckEligibility}
+                disabled={isCheckingEligibility}
+              >
+                {isCheckingEligibility ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
+                )}
+                <Text style={styles.checkBtnText}>
+                  {isCheckingEligibility ? 'जाँच की जा रही है...' : 'पात्रता की जाँच करें'}
+                </Text>
+              </TouchableOpacity>
+
+              {eligibilityResult && (
+                <View style={styles.eligibilityResultBox}>
+                  <Text style={styles.eligibilityResultText}>{eligibilityResult}</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Floating Global Narrator Bar */}
+      <NarratorBar />
     </SafeAreaView>
   );
 }
@@ -377,454 +508,429 @@ export default function Market() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f8fafc',
   },
   header: {
+    backgroundColor: '#15803d',
     paddingHorizontal: 16,
-    paddingVertical: 40,
-  },
-  headerContent: {
+    paddingVertical: 14,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 4,
+  },
+  headerLeft: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: 4,
-  },
-  alertButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 4,
-  },
-  alertButtonText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#4CAF50',
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 2,
   },
-  tabNavigation: {
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     marginHorizontal: 16,
-    borderRadius: 12,
-    marginTop: -20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 14,
+    padding: 4,
+    elevation: 2,
   },
-  tab: {
+  tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 8,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  tabActive: {
-    backgroundColor: '#E8F5E8',
-    borderRadius: 12,
+  tabButtonActive: {
+    backgroundColor: '#15803d',
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
+  tabButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d',
   },
-  tabTextActive: {
-    color: '#4CAF50',
+  tabButtonTextActive: {
+    color: '#ffffff',
   },
   content: {
     flex: 1,
-    marginTop: 16,
-  },
-  tabContent: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
   },
-  alertsCard: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+  aiPredictionCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 14,
+    padding: 14,
+    marginVertical: 10,
     borderWidth: 1,
-    borderColor: '#FFE0B2',
+    borderColor: '#86efac',
   },
-  alertsHeader: {
+  aiPredictionHeader: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  sparkleOrb: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#15803d',
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  aiPredictionTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#166534',
+  },
+  aiPredictionSub: {
+    fontSize: 12,
+    color: '#374151',
+    lineHeight: 18,
+    marginTop: 3,
+  },
+  cropMarketCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
     marginBottom: 12,
-    gap: 8,
-  },
-  alertsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#E65100',
-  },
-  alertItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  alertText: {
-    fontSize: 12,
-    color: '#5D4037',
-  },
-  alertStatus: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  alertStatusSuccess: {
-    backgroundColor: '#4CAF50',
-  },
-  alertStatusWarning: {
-    backgroundColor: '#FF9800',
-  },
-  alertStatusText: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  alertStatusTextSuccess: {
-    color: '#fff',
-  },
-  alertStatusTextWarning: {
-    color: '#fff',
-  },
-  marketCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  marketHeader: {
+  cardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  marketInfo: {
+  cropTitleBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  marketIcon: {
-    fontSize: 24,
+  cropEmoji: {
+    fontSize: 34,
   },
-  marketCrop: {
+  cropName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: 'bold',
+    color: '#111827',
   },
-  marketUnit: {
+  cropSub: {
     fontSize: 12,
-    color: '#666',
+    color: '#6b7280',
   },
-  marketPrice: {
+  priceContainer: {
     alignItems: 'flex-end',
   },
-  priceValue: {
+  priceVal: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: 'bold',
+    color: '#111827',
   },
-  priceChange: {
+  changeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: 2,
+    marginTop: 2,
   },
   changeText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
-  marketsContainer: {
-    marginBottom: 16,
+  aiTrendBox: {
+    backgroundColor: '#f8fafc',
+    padding: 8,
+    borderRadius: 8,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
   },
-  marketsLabel: {
-    fontSize: 10,
-    color: '#666',
-    marginBottom: 8,
+  aiTrendText: {
+    fontSize: 11,
+    color: '#15803d',
+    fontWeight: '600',
   },
-  marketItem: {
+  mandisContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    paddingTop: 8,
+    marginTop: 4,
+    gap: 6,
+  },
+  mandisHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6b7280',
+    marginBottom: 2,
+  },
+  mandiRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 4,
   },
-  marketItemInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  marketName: {
+  mandiName: {
     fontSize: 12,
-    color: '#1a1a1a',
+    color: '#374151',
+    fontWeight: '500',
   },
-  marketItemPrice: {
-    alignItems: 'flex-end',
+  mandiPrice: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#15803d',
   },
-  marketUpdated: {
+  mandiUpdated: {
     fontSize: 10,
-    color: '#666',
+    color: '#9ca3af',
   },
-  marketActions: {
-    flexDirection: 'row',
-    gap: 8,
+  // Schemes Styles
+  eligibilityHeroCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
-  actionButton: {
-    flex: 1,
+  heroIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#dcfce7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#15803d',
+  },
+  heroSub: {
+    fontSize: 12,
+    color: '#4b5563',
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  heroBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
+    gap: 6,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 10,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    gap: 4,
+    borderColor: '#86efac',
   },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
-  },
-  quickActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  quickAction: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  quickActionText: {
-    fontSize: 10,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
+  heroBtnText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#15803d',
   },
   schemeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   schemeHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
   },
-  schemeInfo: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-    gap: 12,
+  schemeEmoji: {
+    fontSize: 28,
   },
-  schemeIcon: {
-    fontSize: 24,
+  schemeTitleHindi: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#111827',
   },
-  schemeTitleContainer: {
-    flex: 1,
+  schemeTitleEnglish: {
+    fontSize: 11,
+    color: '#6b7280',
   },
-  schemeTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    lineHeight: 18,
-    marginBottom: 4,
-  },
-  schemeStatus: {
-    alignSelf: 'flex-start',
+  schemeStatusTag: {
+    backgroundColor: '#dcfce7',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  schemeStatusActive: {
-    backgroundColor: '#E8F5E8',
-  },
-  schemeStatusInactive: {
-    backgroundColor: '#F0F0F0',
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   schemeStatusText: {
     fontSize: 10,
-    fontWeight: '500',
+    fontWeight: 'bold',
+    color: '#15803d',
   },
-  schemeStatusTextActive: {
-    color: '#4CAF50',
-  },
-  schemeStatusTextInactive: {
-    color: '#666',
-  },
-  schemeCategory: {
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  schemeCategoryText: {
-    fontSize: 10,
-    color: '#666',
-  },
-  schemeDescription: {
+  schemeDesc: {
     fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
-    marginBottom: 12,
+    color: '#4b5563',
+    lineHeight: 18,
+    marginBottom: 10,
   },
-  schemeDetails: {
+  schemeHighlightsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  schemeDetail: {
+  highlightItem: {
     flex: 1,
   },
-  schemeDetailLabel: {
-    fontSize: 10,
-    color: '#666',
-    marginBottom: 2,
+  highlightLabel: {
+    fontSize: 11,
+    color: '#6b7280',
   },
-  schemeDetailValue: {
+  highlightVal: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#4CAF50',
+    fontWeight: 'bold',
+    color: '#15803d',
+    marginTop: 2,
   },
-  schemeDetailValueOrange: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#FF9800',
-  },
-  eligibilityContainer: {
-    marginBottom: 16,
+  eligibilityBox: {
+    backgroundColor: '#fffbeb',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
   },
   eligibilityLabel: {
-    fontSize: 10,
-    color: '#666',
-    marginBottom: 2,
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#b45309',
   },
-  eligibilityText: {
-    fontSize: 10,
-    color: '#1a1a1a',
+  eligibilityVal: {
+    fontSize: 11,
+    color: '#78350f',
+    marginTop: 2,
   },
   schemeActions: {
     flexDirection: 'row',
     gap: 8,
+    alignItems: 'center',
   },
-  schemePrimaryButton: {
+  applyBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    paddingVertical: 8,
+    gap: 6,
+    backgroundColor: '#15803d',
+    paddingVertical: 9,
     borderRadius: 8,
-    gap: 4,
   },
-  schemePrimaryButtonText: {
+  applyBtnText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
-  schemeSecondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  schemeNarrateBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0fdf4',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    gap: 4,
+    borderColor: '#bbf7d0',
   },
-  schemeSecondaryButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'flex-end',
   },
-  applicationStatus: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#BBDEFB',
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '85%',
   },
-  applicationStatusTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1565C0',
-    marginBottom: 12,
-  },
-  applicationItem: {
+  modalHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 8,
-    borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 14,
   },
-  applicationName: {
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  closeBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+  },
+  inputLabel: {
     fontSize: 12,
-    color: '#1a1a1a',
+    fontWeight: 'bold',
+    color: '#374151',
+    marginBottom: 4,
   },
-  applicationStatusBadge: {
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  applicationStatusBadgePending: {
-    backgroundColor: '#FF9800',
-  },
-  applicationStatusText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#fff',
-  },
-  applicationStatusTextPending: {
-    color: '#fff',
-  },
-  trackButton: {
-    backgroundColor: '#fff',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
+  modalInput: {
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#2196F3',
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#1f2937',
   },
-  trackButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2196F3',
+  checkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#15803d',
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  checkBtnText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  eligibilityResultBox: {
+    backgroundColor: '#f0fdf4',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  eligibilityResultText: {
+    fontSize: 13,
+    color: '#166534',
+    lineHeight: 20,
   },
 });

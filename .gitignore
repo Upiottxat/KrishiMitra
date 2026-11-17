@@ -33,6 +33,11 @@ yarn-error.*
 # local env files
 .env*.local
 
+# AI models & dynamic downloads
+*.gguf
+*.bin
+models/
+
 # typescript
 *.tsbuildinfo
 

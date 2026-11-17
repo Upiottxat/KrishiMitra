@@ -5,7 +5,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet
+  StyleSheet,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,21 +15,11 @@ import ChatInput from '../../components/Advisory/ChatInput';
 import ImagePreviewModal from '../../components/Advisory/ImagePreviewModal';
 import LanguageModal from '../../components/Advisory/LanguageModal';
 import MessageList from '../../components/Advisory/MessageList';
-import { styles as commonStyles } from '../../constants/styles';
+import { KisanVaniModal } from '../../components/VoiceAssistant/KisanVaniModal';
+import { NarratorBar } from '../../components/Narrator/NarratorBar';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { useKrishiAI } from '../../hooks/useKrishiAI';
-// import { offlineDetector } from '../../services/detector/OfflineDetector';
 
-// ----------- Types -----------
-interface Message {
-  id: number;
-  type: 'user' | 'bot';
-  message: string;
-  timestamp: string;
-  imageUri?: string;
-}
-
-// ----------- Component -----------
 export default function Advisory() {
   const {
     messages,
@@ -37,91 +28,74 @@ export default function Advisory() {
     loading,
     langCode,
     setLangCode,
+    activeTier,
     scrollViewRef,
     handleSendMessage,
     getLangObj,
     i18n,
+    speakMessage,
+    speakingMessageId,
   } = useKrishiAI();
 
   const { t } = useTranslation();
+  const [langModalVisible, setLangModalVisible] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [voiceModalVisible, setVoiceModalVisible] = useState(false);
+
   const { isListening, isTranscribing, handleMicPress } = useAudioRecorder({
     langCode,
     onTranscriptionComplete: (text) => setCurrentMessage(text),
   });
 
-  const [langModalVisible, setLangModalVisible] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-
-  // Load on mount
-  // useEffect(() => {
-  //   offlineDetector.loadModel();
-  // }, []);
-
-  // -------- Camera Capture + Offline Scan ----------
   const handleCameraPress = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(t('alerts.permission'), t('alerts.cameraPermission'));
+      Alert.alert(
+        t('alerts.permission') || 'अनुमति आवश्यक',
+        t('alerts.cameraPermission') || 'पौधे की फोटो लेने के लिए कैमरा अनुमति दें।'
+      );
       return;
     }
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
-      quality: 0.6,
+      quality: 0.7,
       base64: true,
     });
 
     if (!result.canceled) {
       const imageAsset = result.assets[0];
-      // show user image in chat
-      const userMsg: Message = {
-        id: Date.now(),
-        type: 'user',
-        message: t('chat.photoPlaceholder') || "Here's a photo of my plant.",
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        imageUri: imageAsset.uri,
-      };
-      handleAddMessage(userMsg);
-
-      // offline disease detection (commented out)
-      // const detection = await offlineDetector.detectDisease(imageAsset.uri);
-      // if (detection) {
-      //   const botMsg: Message = {
-      //     id: Date.now() + 1,
-      //     type: 'bot',
-      //     message: `The offline scan suggests **${detection.disease}** (confidence ${(detection.confidence * 100).toFixed(0)}%).\n\nWould you like detailed treatment advice?`,
-      //     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      //   };
-      //   handleAddMessage(botMsg);
-      //   setCurrentMessage(`My plant might have ${detection.disease}. Please provide detailed steps.`);
-      // } else {
-        // fallback to online AI
-        handleSendMessage(t('chat.defaultQuery') || 'What can you tell me about this plant?', imageAsset);
-      // }
+      handleSendMessage(
+        'कृपया इस पौधे की फोटो की जाँच करें। इसमें क्या बीमारी या कीट के लक्षण हैं? जैविक व रासायनिक उपाय बताएं।',
+        imageAsset
+      );
     }
   };
 
-  const handleAddMessage = (msg: Message) => {
-    // we rely on useKrishiAI for messages array; append seamlessly
-    messages.push(msg);
-  };
-
-  // -------- UI --------
   return (
-    <SafeAreaView style={commonStyles.container}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ChatHeader
           langCode={langCode}
           getLangObj={getLangObj}
+          activeTier={activeTier}
           onLanguagePress={() => setLangModalVisible(true)}
           onCameraPress={handleCameraPress}
+          onVoiceAssistantPress={() => setVoiceModalVisible(true)}
         />
+
         <MessageList
           messages={messages}
           scrollViewRef={scrollViewRef}
           loading={loading}
           onImagePress={(uri) => setPreviewImage(uri)}
+          speakingMessageId={speakingMessageId}
+          onSpeakPress={speakMessage}
         />
+
         <ChatInput
           currentMessage={currentMessage}
           setCurrentMessage={setCurrentMessage}
@@ -130,6 +104,7 @@ export default function Advisory() {
           isListening={isListening}
           isTranscribing={isTranscribing}
           loading={loading}
+          onOpenVoiceModal={() => setVoiceModalVisible(true)}
         />
 
         <LanguageModal
@@ -149,26 +124,23 @@ export default function Advisory() {
           onClose={() => setPreviewImage(null)}
         />
 
+        {/* Dedicated Kisan Vani Interactive Voice Assistant Modal */}
+        <KisanVaniModal
+          visible={voiceModalVisible}
+          onClose={() => setVoiceModalVisible(false)}
+          langCode={langCode}
+        />
+
+        {/* Global Floating Narrator Bar */}
+        <NarratorBar />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-// -------- Styles specific to this screen --------
 const styles = StyleSheet.create({
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  loadingText: {
-    marginTop: 8,
-    color: '#fff',
-    fontSize: 16,
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
   },
 });

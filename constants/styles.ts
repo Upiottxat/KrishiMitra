@@ -17,7 +17,7 @@ export const styles = StyleSheet.create({
   avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', marginRight: 8, borderWidth: 1, borderColor: '#E1F0D7' },
   bubble: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 18 },
   bubbleBot: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 5, elevation: 3 },
-  bubbleUser: { backgroundColor: '#E1F0D7', borderTopRightRadius: 4,maxWidth:'100% ' },
+  bubbleUser: { backgroundColor: '#E1F0D7', borderTopRightRadius: 4, maxWidth: '100%' },
   messageImage: { width: 250, height: 180, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' },
   messageText: { fontSize: 16, lineHeight: 24 },
   messageTextUser: { color: '#25492b' },

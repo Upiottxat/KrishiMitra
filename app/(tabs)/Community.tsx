@@ -1,14 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
-  ScrollView,
+  Modal,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { NarratorBar } from '../../components/Narrator/NarratorBar';
+import { StorageContext } from '../../Context/StorageContext';
+import { AIService } from '../../services/AIService';
+import { NarratorService } from '../../services/NarratorService';
+
+interface Comment {
+  author: string;
+  role: string;
+  content: string;
+  isAI?: boolean;
+}
+
 interface Post {
   id: number;
   author: string;
@@ -20,264 +35,397 @@ interface Post {
   content: string;
   image?: string;
   likes: number;
-  comments: number;
+  commentsCount: number;
   helpful: number;
   tags: string[];
   isQuestion?: boolean;
   isProfessional?: boolean;
+  comments: Comment[];
 }
 
+const INITIAL_POSTS: Post[] = [
+  {
+    id: 1,
+    author: 'Rajesh Kumar (राजेश कुमार)',
+    location: 'अमृतसर, पंजाब',
+    expertise: 'धान व गेहूं विशेषज्ञ',
+    verified: true,
+    avatar: '🌾',
+    timeAgo: '2 घंटे पहले',
+    content:
+      'इस बार गेहूं की बुवाई में सुपर सीडर का उपयोग किया। पराली को बिना जलाए मिट्टी में दबाने से नमी बनी हुई है और खरपतवार भी 40% कम उगे हैं। किसान भाइयों को सलाह है कि पराली कभी न जलाएं।',
+    likes: 38,
+    commentsCount: 2,
+    helpful: 24,
+    tags: ['SuperSeeder', 'ZeroBurning', 'WheatSowing'],
+    comments: [
+      {
+        author: 'KrishiMitra AI Bot 🤖',
+        role: 'सत्यापित कृषि AI',
+        content: 'सराहनीय पहल! पराली को मिट्टी में मिलाने से प्रति एकड़ लगभग 35 kg यूरिया, 15 kg फॉस्फेट व 150 kg पोटाश प्राकृतिक रूप से जमीन को मिलता है।',
+        isAI: true,
+      },
+    ],
+  },
+  {
+    id: 2,
+    author: 'Priya Sharma (प्रिया शर्मा)',
+    location: 'करनाल, हरियाणा',
+    expertise: 'जैविक खेती (Organic Farming)',
+    verified: true,
+    avatar: '🍅',
+    timeAgo: '4 घंटे पहले',
+    content:
+      'टमाटर के पौधों की पत्तियों पर काले व भूरे गोल छल्लेदार धब्बे आ रहे हैं। क्या यह अगेती झुलसा (Early Blight) है? कृपया बिना रासायनिक दवा के सुरक्षित जैविक समाधान बताएं।',
+    likes: 19,
+    commentsCount: 1,
+    helpful: 12,
+    tags: ['Tomato', 'OrganicCure', 'EarlyBlight'],
+    isQuestion: true,
+    comments: [
+      {
+        author: 'KrishiMitra AI Bot 🤖',
+        role: 'सत्यापित कृषि AI',
+        content: 'हाँ प्रिया जी, यह अर्ली ब्लाइट के लक्षण हैं। उपाय: 5ml नीम तेल (10,000 PPM) + 2g ट्राइकोडर्मा विरिडी प्रति लीटर पानी में मिलाकर 7 दिन के अंतराल पर 2 बार छिड़काव करें। निचली संक्रमित पत्तियों को तोड़कर नष्ट कर दें।',
+        isAI: true,
+      },
+    ],
+  },
+  {
+    id: 3,
+    author: 'Dr. Amit Verma (कृषि वैज्ञानिक)',
+    location: 'IARI पूसा, नई दिल्ली',
+    expertise: 'पादप रोग विशेषज्ञ (Plant Pathologist)',
+    verified: true,
+    avatar: '🧑‍🔬',
+    timeAgo: '6 घंटे पहले',
+    content:
+      'मौसम चेतावनी: उत्तर भारत में आगामी दिनों में रात का तापमान गिरने और कोहरा छाने से सरसों में चेपा (Aphids) और गेहूं में रतुआ रोग का खतरा बढ़ सकता है। अपने खेतों की प्रतिदिन सुबह निगरानी करें।',
+    likes: 64,
+    commentsCount: 0,
+    helpful: 48,
+    tags: ['WeatherAlert', 'CropProtection', 'Mustard'],
+    isProfessional: true,
+    comments: [],
+  },
+];
+
 export default function Community() {
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: 1,
-      author: 'Rajesh Kumar',
-      location: 'Punjab',
-      expertise: 'Rice Expert',
-      verified: true,
-      avatar: 'RK',
-      timeAgo: '2 hours ago',
-      content:
-        'Great harvest this season! Here are some tips for post-harvest storage to prevent pest damage. Keep grain moisture below 14% and use neem oil treatment.',
-      image: '🌾',
-      likes: 24,
-      comments: 8,
-      helpful: 15,
-      tags: ['harvest', 'storage', 'pest-control'],
-    },
-    {
-      id: 2,
-      author: 'Priya Sharma',
-      location: 'Haryana',
-      expertise: 'Organic Farming',
-      verified: true,
-      avatar: 'PS',
-      timeAgo: '4 hours ago',
-      content:
-        'My tomato plants are showing these spots. Any organic solutions? Avoiding chemical pesticides as we\'re certified organic.',
-      image: '🍅',
-      likes: 12,
-      comments: 15,
-      helpful: 8,
-      tags: ['organic', 'disease', 'tomato'],
-      isQuestion: true,
-    },
-    {
-      id: 3,
-      author: 'Dr. Amit Verma',
-      location: 'IARI, New Delhi',
-      expertise: 'Plant Pathologist',
-      verified: true,
-      avatar: 'AV',
-      timeAgo: '6 hours ago',
-      content:
-        'Weather update: Heavy rains expected next week in North India. Prepare drainage systems and avoid nitrogen application before rains to prevent lodging.',
-      likes: 45,
-      comments: 22,
-      helpful: 30,
-      tags: ['weather', 'advisory', 'drainage'],
-      isProfessional: true,
-    },
-  ]);
+  const storageContext = useContext(StorageContext);
+  const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const [filter, setFilter] = useState<'all' | 'questions' | 'experts'>('all');
+  const [showNewPostModal, setShowNewPostModal] = useState(false);
+  const [newContent, setNewContent] = useState('');
+  const [newIsQuestion, setNewIsQuestion] = useState(true);
+  const [isPosting, setIsPosting] = useState(false);
 
-  const [filter, setFilter] = useState('all');
-
-  const filters = [
-    { id: 'all', label: 'All Posts', count: posts.length },
-    { id: 'questions', label: 'Questions', count: posts.filter(p => p.isQuestion).length },
-    { id: 'experts', label: 'Expert Tips', count: posts.filter(p => p.isProfessional).length },
-    { id: 'following', label: 'Following', count: 12 },
-  ];
-
-  const filteredPosts = posts.filter(post => {
+  const filteredPosts = posts.filter((post) => {
     if (filter === 'all') return true;
     if (filter === 'questions') return post.isQuestion;
     if (filter === 'experts') return post.isProfessional;
-    if (filter === 'following') return post.verified;
     return true;
   });
 
   const handleLike = (postId: number) => {
-    setPosts(prev =>
-      prev.map(post => (post.id === postId ? { ...post, likes: post.likes + 1 } : post))
+    setPosts((prev) =>
+      prev.map((post) => (post.id === postId ? { ...post, likes: post.likes + 1 } : post))
     );
   };
 
   const handleHelpful = (postId: number) => {
-    setPosts(prev =>
-      prev.map(post => (post.id === postId ? { ...post, helpful: post.helpful + 1 } : post))
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId ? { ...post, helpful: post.helpful + 1 } : post
+      )
     );
   };
 
-  const renderPost = ({ item: post }: { item: Post }) => (
-    <View style={styles.postCard}>
-      <View style={styles.postHeader}>
-        <View style={styles.authorInfo}>
-          <View
-            style={[
-              styles.avatar,
-              post.isProfessional ? styles.avatarProfessional : styles.avatarRegular,
-            ]}
-          >
-            <Text style={styles.avatarText}>{post.avatar}</Text>
-          </View>
-          <View style={styles.authorDetails}>
-            <View style={styles.authorName}>
-              <Text style={styles.authorNameText}>{post.author}</Text>
-              {post.verified && (
-                <Ionicons name="checkmark-circle" size={16} color="#2196F3" />
-              )}
-              {post.isProfessional && (
-                <Ionicons name="star" size={16} color="#FF9800" />
-              )}
-            </View>
-            <View style={styles.authorMeta}>
-              <Text style={styles.expertise}>{post.expertise}</Text>
-              <Text style={styles.metaSeparator}>•</Text>
-              <Ionicons name="location-outline" size={12} color="#666" />
-              <Text style={styles.location}>{post.location}</Text>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity>
-          <Ionicons name="ellipsis-vertical" size={20} color="#666" />
-        </TouchableOpacity>
-      </View>
+  const handleNarratePost = (post: Post) => {
+    const text = `${post.author} ने लिखा: ${post.content}`;
+    NarratorService.speak(text, { language: 'hi-IN' });
+  };
 
-      <View style={styles.postContent}>
-        <Text style={styles.contentText}>{post.content}</Text>
+  const handleCreatePost = async () => {
+    if (!newContent.trim()) {
+      Alert.alert('अपूर्ण पोस्ट', 'कृपया अपना प्रश्न या अनुभव लिखें।');
+      return;
+    }
 
-        {post.image && (
-          <View style={styles.imageContainer}>
-            <Text style={styles.imageIcon}>{post.image}</Text>
-            <Text style={styles.imageCaption}>Tap to view image</Text>
-          </View>
-        )}
+    setIsPosting(true);
+    const newPostId = Date.now();
+    const userPost: Post = {
+      id: newPostId,
+      author: storageContext?.userBasicInfo?.farmerName || 'किसान साथी (You)',
+      location: storageContext?.userBasicInfo?.location || 'भारत',
+      expertise: `${storageContext?.userBasicInfo?.cropType || 'फसल'} कृषक`,
+      verified: false,
+      avatar: '🧑‍🌾',
+      timeAgo: 'अभी-अभी (Just now)',
+      content: newContent.trim(),
+      likes: 1,
+      commentsCount: 0,
+      helpful: 0,
+      tags: ['FarmerQuestion', 'KrishiMitra'],
+      isQuestion: newIsQuestion,
+      comments: [],
+    };
 
-        <View style={styles.tagsContainer}>
-          {post.tags.map((tag, index) => (
-            <View key={index} style={styles.tag}>
-              <Text style={styles.tagText}>#{tag}</Text>
-            </View>
-          ))}
-        </View>
+    setPosts((prev) => [userPost, ...prev]);
+    setShowNewPostModal(false);
+    const queryForAI = newContent.trim();
+    setNewContent('');
 
-        <View style={styles.postMeta}>
-          <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={12} color="#666" />
-            <Text style={styles.metaText}>{post.timeAgo}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Ionicons name="thumbs-up-outline" size={12} color="#666" />
-            <Text style={styles.metaText}>{post.helpful} found helpful</Text>
-          </View>
-        </View>
+    // If it's a question, trigger AI to automatically generate an intelligent answer
+    if (newIsQuestion) {
+      try {
+        const prompt = `A farmer posted this question on the agriculture community board:
+"${queryForAI}"
+Provide an immediate, authoritative 2-line practical solution in conversational Hindi as KrishiMitra AI Bot.`;
 
-        <View style={styles.postActions}>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => handleLike(post.id)}
-            >
-              <Ionicons name="heart-outline" size={18} color="#666" />
-              <Text style={styles.actionText}>{post.likes}</Text>
-            </TouchableOpacity>
+        await AIService.streamChat(
+          { messageText: prompt },
+          {
+            onChunk: () => {},
+            onComplete: (aiReply) => {
+              setPosts((current) =>
+                current.map((p) =>
+                  p.id === newPostId
+                    ? {
+                        ...p,
+                        commentsCount: p.commentsCount + 1,
+                        comments: [
+                          ...p.comments,
+                          {
+                            author: 'KrishiMitra AI Bot 🤖',
+                            role: 'सत्यापित कृषि AI',
+                            content: aiReply.trim(),
+                            isAI: true,
+                          },
+                        ],
+                      }
+                    : p
+                )
+              );
+            },
+            onError: () => {},
+          }
+        );
+      } catch {}
+    }
 
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="chatbubble-outline" size={18} color="#666" />
-              <Text style={styles.actionText}>{post.comments}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="share-outline" size={18} color="#666" />
-              <Text style={styles.actionText}>Share</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.helpfulButton}
-            onPress={() => handleHelpful(post.id)}
-          >
-            <Ionicons name="thumbs-up-outline" size={14} color="#4CAF50" />
-            <Text style={styles.helpfulButtonText}>Helpful</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
+    setIsPosting(false);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>Community</Text>
-          <TouchableOpacity style={styles.postButton}>
-            <Ionicons name="add" size={16} color="#fff" />
-            <Text style={styles.postButtonText}>Post</Text>
+          <View>
+            <Text style={styles.headerTitle}>किसान चौपाल (Community)</Text>
+            <Text style={styles.headerSubtitle}>अनुभव साझा करें • वैज्ञानिकों व AI से उत्तर पाएं</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.postButton}
+            onPress={() => setShowNewPostModal(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add-circle" size={18} color="#ffffff" />
+            <Text style={styles.postButtonText}>सवाल पूछें</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Filter Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filtersContainer}
-        >
-          {filters.map(filterOption => (
-            <TouchableOpacity
-              key={filterOption.id}
-              style={[
-                styles.filterTab,
-                filter === filterOption.id && styles.filterTabActive,
-              ]}
-              onPress={() => setFilter(filterOption.id)}
-            >
-              <Text
-                style={[
-                  styles.filterTabText,
-                  filter === filterOption.id && styles.filterTabTextActive,
-                ]}
-              >
-                {filterOption.label}
-              </Text>
-              <View style={styles.filterCount}>
-                <Text style={styles.filterCountText}>{filterOption.count}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Posts */}
-      <FlatList
-        data={filteredPosts}
-        renderItem={renderPost}
-        keyExtractor={item => item.id.toString()}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.postsContainer}
-      />
-
-      {/* Quick Help Section */}
-      <View style={styles.quickHelpContainer}>
-        <View style={styles.quickHelpContent}>
-          <Text style={styles.quickHelpIcon}>💡</Text>
-          <View style={styles.quickHelpInfo}>
-            <Text style={styles.quickHelpTitle}>Need immediate help?</Text>
-            <Text style={styles.quickHelpSubtitle}>
-              Get instant advice from verified experts
+        {/* Filter Pills */}
+        <View style={styles.filterRow}>
+          <TouchableOpacity
+            style={[styles.filterPill, filter === 'all' && styles.filterPillActive]}
+            onPress={() => setFilter('all')}
+          >
+            <Text style={[styles.filterPillText, filter === 'all' && styles.filterPillTextActive]}>
+              सभी पोस्ट ({posts.length})
             </Text>
-            <TouchableOpacity style={styles.quickHelpButton}>
-              <Text style={styles.quickHelpButtonText}>Ask Expert Now</Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterPill, filter === 'questions' && styles.filterPillActive]}
+            onPress={() => setFilter('questions')}
+          >
+            <Text style={[styles.filterPillText, filter === 'questions' && styles.filterPillTextActive]}>
+              किसान प्रश्न ❓
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterPill, filter === 'experts' && styles.filterPillActive]}
+            onPress={() => setFilter('experts')}
+          >
+            <Text style={[styles.filterPillText, filter === 'experts' && styles.filterPillTextActive]}>
+              वैज्ञानिक सलाह 🧑‍🔬
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Floating Action Button */}
-      <TouchableOpacity style={styles.fab}>
-        <Ionicons name="camera" size={24} color="#fff" />
+      {/* Post List */}
+      <FlatList
+        data={filteredPosts}
+        keyExtractor={(item) => item.id.toString()}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.postListContent}
+        renderItem={({ item: post }) => (
+          <View style={styles.postCard}>
+            <View style={styles.postAuthorRow}>
+              <View style={styles.avatarCircle}>
+                <Text style={{ fontSize: 20 }}>{post.avatar}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.authorName}>{post.author}</Text>
+                  {post.verified && (
+                    <Ionicons name="checkmark-circle" size={16} color="#15803d" />
+                  )}
+                  {post.isProfessional && (
+                    <Ionicons name="star" size={14} color="#f59e0b" />
+                  )}
+                </View>
+                <Text style={styles.authorMeta}>
+                  {post.expertise} • 📍 {post.location} • {post.timeAgo}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleNarratePost(post)}
+                style={styles.listenBtn}
+              >
+                <Ionicons name="volume-high" size={16} color="#15803d" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.postContent}>{post.content}</Text>
+
+            {/* Tags */}
+            <View style={styles.tagsRow}>
+              {post.tags.map((tag, tIdx) => (
+                <View key={tIdx} style={styles.tagPill}>
+                  <Text style={styles.tagText}>#{tag}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* AI or Member Comments */}
+            {post.comments.length > 0 && (
+              <View style={styles.commentsBox}>
+                {post.comments.map((cm, cIdx) => (
+                  <View key={cIdx} style={styles.commentItem}>
+                    <View style={styles.commentAuthorRow}>
+                      <Ionicons name="sparkles" size={13} color="#15803d" />
+                      <Text style={styles.commentAuthor}>{cm.author}</Text>
+                      <Text style={styles.commentRole}>({cm.role})</Text>
+                    </View>
+                    <Text style={styles.commentText}>{cm.content}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Actions Bar */}
+            <View style={styles.postActions}>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleLike(post.id)}
+              >
+                <Ionicons name="heart-outline" size={16} color="#ef4444" />
+                <Text style={styles.actionText}>{post.likes} पसंद</Text>
+              </TouchableOpacity>
+
+              <View style={styles.actionBtn}>
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color="#15803d" />
+                <Text style={styles.actionText}>{post.comments.length} उत्तर</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.helpfulBtn}
+                onPress={() => handleHelpful(post.id)}
+              >
+                <Ionicons name="thumbs-up" size={14} color="#15803d" />
+                <Text style={styles.helpfulText}>मददगार ({post.helpful})</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      />
+
+      {/* Floating Action Button to Post */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setShowNewPostModal(true)}
+        activeOpacity={0.85}
+      >
+        <Ionicons name="create" size={24} color="#ffffff" />
       </TouchableOpacity>
+
+      {/* MODAL: CREATE NEW POST */}
+      <Modal visible={showNewPostModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>किसान चौपाल में पोस्ट करें</Text>
+              <TouchableOpacity
+                onPress={() => setShowNewPostModal(false)}
+                style={styles.closeBtn}
+              >
+                <Ionicons name="close" size={22} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.postTypeSwitch}>
+              <TouchableOpacity
+                style={[styles.typeBtn, newIsQuestion && styles.typeBtnActive]}
+                onPress={() => setNewIsQuestion(true)}
+              >
+                <Text style={[styles.typeBtnText, newIsQuestion && styles.typeBtnTextActive]}>
+                  ❓ सवाल पूछें (AI उत्तर देगा)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeBtn, !newIsQuestion && styles.typeBtnActive]}
+                onPress={() => setNewIsQuestion(false)}
+              >
+                <Text style={[styles.typeBtnText, !newIsQuestion && styles.typeBtnTextActive]}>
+                  💡 अनुभव साझा करें
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.postInput}
+              placeholder="अपनी फसल की समस्या, बीमारी या सुझाव यहाँ लिखें..."
+              placeholderTextColor="#9ca3af"
+              value={newContent}
+              onChangeText={setNewContent}
+              multiline
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={styles.submitPostBtn}
+              onPress={handleCreatePost}
+              disabled={isPosting}
+            >
+              {isPosting ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Ionicons name="paper-plane" size={18} color="#ffffff" />
+              )}
+              <Text style={styles.submitPostBtnText}>
+                {isPosting ? 'पोस्ट किया जा रहा है...' : 'चौपाल में पोस्ट करें'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Floating Global Narrator Bar */}
+      <NarratorBar />
     </SafeAreaView>
   );
 }
@@ -285,303 +433,293 @@ export default function Community() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f8fafc',
   },
   header: {
-    backgroundColor: '#fff',
+    backgroundColor: '#15803d',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    paddingVertical: 14,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 4,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 2,
   },
   postButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
     gap: 4,
+    backgroundColor: '#22c55e',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   postButtonText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: 'bold',
+    color: '#ffffff',
   },
-  filtersContainer: {
+  filterRow: {
     flexDirection: 'row',
+    gap: 8,
   },
-  filterTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  filterPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
-    marginRight: 8,
-    gap: 6,
   },
-  filterTabActive: {
-    backgroundColor: '#4CAF50',
+  filterPillActive: {
+    backgroundColor: '#ffffff',
   },
-  filterTabText: {
+  filterPillText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
+    color: '#ffffff',
+    fontWeight: '600',
   },
-  filterTabTextActive: {
-    color: '#fff',
+  filterPillTextActive: {
+    color: '#15803d',
+    fontWeight: '700',
   },
-  filterCount: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  filterCountText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#666',
-  },
-  postsContainer: {
+  postListContent: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 80,
+    gap: 12,
   },
   postCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  postHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: 16,
-    paddingBottom: 12,
-  },
-  authorInfo: {
+  postAuthorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 10,
+    marginBottom: 10,
   },
-  avatar: {
+  avatarCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: '#f0fdf4',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarRegular: {
-    backgroundColor: '#E8F5E8',
-  },
-  avatarProfessional: {
-    backgroundColor: '#E3F2FD',
-  },
-  avatarText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4CAF50',
-  },
-  authorDetails: {
-    flex: 1,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
   authorName: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  authorNameText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: 'bold',
+    color: '#111827',
   },
   authorMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    fontSize: 11,
+    color: '#6b7280',
     marginTop: 2,
-    gap: 4,
   },
-  expertise: {
-    fontSize: 12,
-    color: '#666',
-  },
-  metaSeparator: {
-    fontSize: 12,
-    color: '#666',
-  },
-  location: {
-    fontSize: 12,
-    color: '#666',
+  listenBtn: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
   },
   postContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  contentText: {
     fontSize: 14,
-    lineHeight: 20,
-    color: '#1a1a1a',
-    marginBottom: 12,
+    color: '#1f2937',
+    lineHeight: 21,
+    marginBottom: 10,
   },
-  imageContainer: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    paddingVertical: 32,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  imageIcon: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  imageCaption: {
-    fontSize: 10,
-    color: '#666',
-  },
-  tagsContainer: {
+  tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  tag: {
-    backgroundColor: '#F0F0F0',
+  tagPill: {
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   tagText: {
-    fontSize: 10,
-    color: '#666',
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '500',
   },
-  postMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    marginBottom: 12,
+  commentsBox: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
   },
-  metaItem: {
+  commentItem: {
+    gap: 2,
+  },
+  commentAuthorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  metaText: {
+  commentAuthor: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#15803d',
+  },
+  commentRole: {
     fontSize: 10,
-    color: '#666',
+    color: '#166534',
+  },
+  commentText: {
+    fontSize: 12,
+    color: '#14532d',
+    lineHeight: 18,
+    marginTop: 2,
   },
   postActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: '#f3f4f6',
+    paddingTop: 8,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  actionButton: {
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
   actionText: {
     fontSize: 12,
-    color: '#666',
+    color: '#4b5563',
+    fontWeight: '500',
   },
-  helpfulButton: {
+  helpfulBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
     gap: 4,
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  helpfulButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#4CAF50',
-  },
-  quickHelpContainer: {
-    margin: 16,
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BBDEFB',
-  },
-  quickHelpContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-  },
-  quickHelpIcon: {
-    fontSize: 32,
-  },
-  quickHelpInfo: {
-    flex: 1,
-  },
-  quickHelpTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
-  quickHelpSubtitle: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 8,
-  },
-  quickHelpButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#2196F3',
-  },
-  quickHelpButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#2196F3',
+  helpfulText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#15803d',
   },
   fab: {
     position: 'absolute',
-    bottom: 80,
-    right: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#4CAF50',
+    bottom: 85,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#15803d',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
     elevation: 8,
+    shadowColor: '#15803d',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  closeBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+  },
+  postTypeSwitch: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 14,
+  },
+  typeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  typeBtnActive: {
+    backgroundColor: '#ffffff',
+    elevation: 1,
+  },
+  typeBtnText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  typeBtnTextActive: {
+    color: '#15803d',
+    fontWeight: 'bold',
+  },
+  postInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 14,
+    color: '#1f2937',
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  submitPostBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#15803d',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  submitPostBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
   },
 });

@@ -51,8 +51,8 @@ export default function TabLayout() {
         },
         headerShown: false,
         animationEnabled: false, 
-        tabBarButton: (props) => (
-          <TouchableOpacity {...props} activeOpacity={1} /> 
+        tabBarButton: ({ delayLongPress, ...rest }: any) => (
+          <TouchableOpacity {...rest} activeOpacity={1} /> 
         ),
       })}
     >

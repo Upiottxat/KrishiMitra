@@ -1,5 +1,3 @@
-import * as FileSystem from 'expo-file-system';
-
 // Define a type for the structure of your disease data for better code safety
 export interface DiseaseInfo {
   symptoms: string[];
@@ -15,14 +13,13 @@ class OfflineKnowledgeService {
 
   // Load the entire JSON database from assets into memory
   async loadDatabase(): Promise<void> {
-    if (this.database) return; // Avoid loading more than once
+    if (this.database) return;
 
     try {
       console.log("Loading offline disease database...");
-    
-      const dbUri = FileSystem.bundleDirectory + 'assets/disease_database.json';
-      const dbJsonString = await FileSystem.readAsStringAsync(dbUri);
-      this.database = JSON.parse(dbJsonString);
+      // In React Native / Expo, requiring JSON directly guarantees instant, bundled offline loading
+      const data = require('../../assets/disease_database.json');
+      this.database = data;
       console.log("Offline database loaded successfully!");
     } catch (error) {
       console.error("Failed to load offline disease database:", error);
@@ -32,10 +29,13 @@ class OfflineKnowledgeService {
   // Get the details for a specific disease by its name
   getDiseaseInfo(diseaseName: string): DiseaseInfo | null {
     if (!this.database) {
-      console.warn("Database not loaded yet.");
-      return null;
+      try {
+        this.database = require('../../assets/disease_database.json');
+      } catch {
+        return null;
+      }
     }
-    return this.database[diseaseName] || null;
+    return this.database ? this.database[diseaseName] || null : null;
   }
 }
 

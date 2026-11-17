@@ -1,12 +1,12 @@
 import NetInfo from "@react-native-community/netinfo";
-import * as Speech from 'expo-speech';
-import { useRef, useState } from 'react';
+import { useContext, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { LANGUAGES } from '../constants/languages';
-import { GeminiService } from '../services/GeminiService';
+import { StorageContext } from '../Context/StorageContext';
+import { AIService, AIProviderTier } from '../services/AIService';
+import { NarratorService } from '../services/NarratorService';
 
-// Interface for a chat message
 export interface Message {
   id: number;
   type: 'user' | 'bot';
@@ -14,142 +14,167 @@ export interface Message {
   timestamp: string;
   imageUri?: string;
   hasAudio?: boolean;
+  tier?: AIProviderTier;
 }
 
-// Interfaces for the Gemini service call
-interface StreamChatResponseParams {
-  messageText: string;
-  imageAsset?: any;
-  langInstruction: string;
-}
-
-interface StreamChatResponseHandlers {
-  onChunk: (streamingText: string) => void;
-  onComplete: (finalText: string) => void;
-  onError: () => void;
-}
-
-// A simple dictionary for offline keyword-based replies.
-// This can be expanded with more keywords and responses.
-const offlineReplies: { [key: string]: string } = {
-  "hello": "Hello! How can I assist you offline?",
-  "hi": "Hello! How can I assist you offline?",
-  "help": "For assistance, please connect to the internet.",
-  "weather": "I am sorry, I cannot fetch weather information while offline.",
-  "price": "I need an internet connection to get current market prices.",
-};
-
-/**
- * Custom hook to manage the Krishi AI chat logic.
- */
 export const useKrishiAI = () => {
   const { t, i18n } = useTranslation();
+  const storageContext = useContext(StorageContext);
+  
   const [messages, setMessages] = useState<Message[]>([
-    // Set the initial welcome message directly
     {
       id: 1,
       type: 'bot',
-      message: "Hello! I am your crop advisory assistant.",
+      message: "🙏 नमस्ते किसान भाई! मैं आपकी डिजिटल कृषि मित्र (KrishiMitra) हूँ।\n\nआप मुझसे किसी भी फसल की बीमारी, मौसम, खाद की सही मात्रा, या मंडी के भाव के बारे में पूछ सकते हैं। आप पौधे की फोटो भी भेज सकते हैं!",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      hasAudio: true
-    }
+      hasAudio: true,
+      tier: 'groq/openai/gpt-oss-20b',
+    },
   ]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [langCode, setLangCode] = useState<string>('auto');
+  const [activeTier, setActiveTier] = useState<AIProviderTier>('groq/openai/gpt-oss-20b');
+  const [langCode, setLangCode] = useState<string>('hi');
+  const [speakingMessageId, setSpeakingMessageId] = useState<number | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
 
-  // Finds the language object based on a language code
-  const getLangObj = (code: string) => LANGUAGES.find(l => l.code === code) || LANGUAGES[0];
-  
-  // Speaks the given text using Expo's Speech module
-  const speakMessage = (text: string) => {
-    try {
-      Speech.stop();
-      Speech.speak(text, { language: langCode !== 'auto' ? langCode : undefined, rate: 0.9 });
-    } catch (e) { 
-      console.warn('Text-to-speech error', e); 
+  const getLangObj = (code: string) => LANGUAGES.find((l) => l.code === code) || LANGUAGES[0];
+
+  const speakMessage = (messageId: number, text: string) => {
+    if (speakingMessageId === messageId) {
+      NarratorService.stop();
+      setSpeakingMessageId(null);
+      return;
     }
+
+    setSpeakingMessageId(messageId);
+    NarratorService.speak(text, {
+      language: langCode !== 'auto' ? langCode : 'hi-IN',
+      onDone: () => setSpeakingMessageId(null),
+      onStopped: () => setSpeakingMessageId(null),
+      onError: () => setSpeakingMessageId(null),
+    });
   };
 
-  // Gets an offline reply using the simple keyword matching dictionary
-  const getOfflineReply = (userMessage: string): string => {
-    const message = userMessage.toLowerCase().trim();
-    for (const keyword in offlineReplies) {
-      if (message.includes(keyword)) {
-        return offlineReplies[keyword];
-      }
-    }
-    // Default fallback message if no keyword is matched
-    return "I have limited functionality offline. Please connect to the internet for full assistance.";
+  const stopSpeaking = () => {
+    NarratorService.stop();
+    setSpeakingMessageId(null);
   };
 
-  // Handles sending a new message (both online and offline)
   const handleSendMessage = async (text?: string, imageAsset?: any) => {
-    const messageText = text || currentMessage;
+    const messageText = text !== undefined ? text : currentMessage;
     if (!messageText.trim() && !imageAsset) return;
 
     const userMessage: Message = {
       id: Date.now(),
       type: 'user',
-      message: imageAsset ? (messageText.trim() || t("imagePrompt")) : messageText,
+      message: imageAsset ? (messageText.trim() || t("imagePrompt") || "पौधे की तस्वीर की जाँच करें") : messageText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       imageUri: imageAsset?.uri,
     };
 
     const botMessageId = Date.now() + 1;
     const botPlaceholderMessage: Message = {
-        id: botMessageId,
-        type: 'bot',
-        message: '...',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        hasAudio: true,
+      id: botMessageId,
+      type: 'bot',
+      message: '...',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      hasAudio: true,
+      tier: activeTier,
     };
 
-    setMessages(prev => [...prev, userMessage, botPlaceholderMessage]);
-    if (!text) setCurrentMessage('');
+    setMessages((prev) => [...prev, userMessage, botPlaceholderMessage]);
+    if (text === undefined) setCurrentMessage('');
     setLoading(true);
 
-    const isOnline = await NetInfo.fetch().then(state => state.isConnected);
+    try {
+      const isOnline = await NetInfo.fetch().then((state) => state.isConnected);
 
-    if (isOnline) {
-      const langInstruction = langCode !== 'auto'
-        ? `Important: Your entire response must be in the ${getLangObj(langCode).name} language.`
-        : "Important: Detect user's language and respond entirely in that language.";
-      
-      await GeminiService.streamChatResponse(
-        { messageText, imageAsset, langInstruction } as StreamChatResponseParams,
+      const langInstruction =
+        langCode !== 'auto'
+          ? `Important: Your entire response must be in the ${getLangObj(langCode).name} language.`
+          : "Important: Detect user's language and respond entirely in that language.";
+
+      let base64 = imageAsset?.base64;
+      if (!base64 && imageAsset?.uri) {
+        try {
+          const FileSystem = require('expo-file-system');
+          base64 = await FileSystem.readAsStringAsync(imageAsset.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (e) {
+          console.warn('[useKrishiAI] Could not convert image to base64:', e);
+        }
+      }
+
+      await AIService.streamChat(
         {
-          onChunk: (streamingText: string) => {
-            setMessages(prev => prev.map(msg => 
-              msg.id === botMessageId ? { ...msg, message: streamingText } : msg
-            ));
+          messageText: userMessage.message,
+          imageAsset: imageAsset ? {
+            uri: imageAsset.uri,
+            base64,
+            mimeType: imageAsset.mimeType || 'image/jpeg',
+          } : undefined,
+          langInstruction,
+          customGroqKey: storageContext?.customGroqKey,
+          customGeminiKey: storageContext?.customGeminiKey,
+        },
+        {
+          onModelSelected: (tier) => {
+            setActiveTier(tier);
           },
-          onComplete: (finalText: string) => {
-            setLoading(false);
-            speakMessage(finalText);
+          onChunk: (streamingText) => {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === botMessageId ? { ...msg, message: streamingText } : msg
+              )
+            );
           },
-          onError: () => {
-            const errorMessage = t('alerts.fallbackError');
-            setMessages(prev => prev.map(msg => 
-              msg.id === botMessageId ? { ...msg, message: errorMessage } : msg
-            ));
-            speakMessage(errorMessage);
+          onComplete: (finalText, tier) => {
             setLoading(false);
-          }
-        } as StreamChatResponseHandlers
+            setActiveTier(tier);
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === botMessageId ? { ...msg, message: finalText, tier } : msg
+              )
+            );
+            // Auto narrate response for farmer accessibility
+            speakMessage(botMessageId, finalText);
+          },
+          onError: (err) => {
+            console.error('[useKrishiAI] Stream error:', err);
+            const fallbackMsg = t('alerts.fallbackError') || 'कृपया पुनः प्रयास करें। सर्वर व्यस्त हो सकता है।';
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === botMessageId
+                  ? { ...msg, message: fallbackMsg, tier: 'offline/rule-engine' }
+                  : msg
+              )
+            );
+            setLoading(false);
+          },
+        }
       );
-    } else {
-      // Simplified Offline Logic
-      const reply = getOfflineReply(messageText);
-      setMessages(prev => prev.map(msg => 
-        msg.id === botMessageId ? { ...msg, message: reply } : msg
-      ));
-      speakMessage(reply);
+    } catch (err: any) {
+      console.error('[useKrishiAI] Error:', err);
       setLoading(false);
     }
   };
-  
-  return { messages, currentMessage, setCurrentMessage, loading, langCode, setLangCode, scrollViewRef, handleSendMessage, getLangObj, i18n };
-};
 
+  return {
+    messages,
+    currentMessage,
+    setCurrentMessage,
+    loading,
+    langCode,
+    setLangCode,
+    activeTier,
+    scrollViewRef,
+    handleSendMessage,
+    getLangObj,
+    i18n,
+    speakMessage,
+    stopSpeaking,
+    speakingMessageId,
+  };
+};
