@@ -36,7 +36,8 @@ yarn-error.*
 # AI models & dynamic downloads
 *.gguf
 *.bin
-models/
+/models/
+!components/models/
 
 # typescript
 *.tsbuildinfo

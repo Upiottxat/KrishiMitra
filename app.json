@@ -33,7 +33,6 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "useAndroidX": true,
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
